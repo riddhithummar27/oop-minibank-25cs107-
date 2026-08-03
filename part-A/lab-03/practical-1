@@ -1,1 +1,38 @@
 
+//in terminal type: javac Point.java
+//then type: java Driver
+
+class Point
+{
+    private int x;
+    private int y;
+
+    Point(int x, int y)
+    {
+        this.x = x;
+        this.y = y;
+    }
+
+    public String toString()
+    //if we remove public, it will give error as you are restricting as ovverride rule can't be more restrictive than the original method.
+    {
+        return "(" + x + ", " + y + ")";
+    }
+
+    //we will use equals method as we need to find distinct numbers
+    public boolean equals(Object obj)
+    {
+        Point temp = (Point)obj;
+
+        //we cant do this.x == obj.x as obj is of type Object and it doesn't have x and y. So we need to typecast it to Point.
+        if(this.x == temp.x && this.y == temp.y)
+        {
+            return true;
+        }
+
+        else {
+             return false;
+        }
+    }
+}
+
