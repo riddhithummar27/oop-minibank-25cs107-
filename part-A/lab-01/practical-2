@@ -1,1 +1,67 @@
+import java.util.Scanner;
 
+record Vehicle(String type, String number) {}
+
+public class TolBooth {
+
+    public static void main(String[] args) {
+
+        int totalToll = 0;
+        int car = 0;
+        int bike = 0;
+        int truck = 0;
+
+        Scanner sc = new Scanner(System.in);
+
+        Vehicle[] V = new Vehicle[10];
+        int i = 0;
+
+        while (true) {
+
+            System.out.println("Enter vehicle type or done to exit:");
+            String type = sc.next();
+
+            if (type.equalsIgnoreCase("done")) {
+                break;
+            }
+
+            System.out.println("Enter vehicle number:");
+            String number = sc.next();
+
+            V[i] = new Vehicle(type, number);
+
+            int toll = switch (V[i].type()) {
+                case "car" -> {
+                    car++;
+                    yield 50;
+                }
+                case "bike" -> {
+                    bike++;
+                    yield 20;
+                }
+                case "truck" -> {
+                    truck++;
+                    yield 150;
+                }
+                default -> 0;
+            };
+
+            System.out.println(V[i].type() + " passed with Toll = " + toll);
+
+            totalToll += toll;
+            i++;
+        }
+
+        System.out.println("Total Toll = " + totalToll);
+
+        if (car >= bike && car >= truck) {
+            System.out.println("Most frequent: car");
+        } else if (bike >= car && bike >= truck) {
+            System.out.println("Most frequent: bike");
+        } else {
+            System.out.println("Most frequent: truck");
+        }
+
+        sc.close();
+    }
+}
