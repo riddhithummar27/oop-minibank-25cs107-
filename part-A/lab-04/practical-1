@@ -1,1 +1,56 @@
 
+class PasswordChecker {
+
+    static boolean checkLength(String pass) {
+        return pass.length() >= 8;
+    }
+
+    static boolean hasUpperCase(String pass) {
+        return pass.matches(".*[A-Z].*");
+    }
+
+    static boolean hasDigit(String pass) {
+        return pass.matches(".*[0-9].*");
+    }
+
+    static boolean hasSpecialCharacter(String pass) {
+        return pass.matches(".*[!@#$%^&*()_+].*");
+    }
+}
+import java.util.Scanner;
+
+public class Driver2 {
+    public static void main(String[] args) {
+
+        Scanner sc = new Scanner(System.in);
+
+        System.out.print("Enter Password: ");
+        String password = sc.next();
+
+        int count = 0;
+
+        if (PasswordChecker.checkLength(password)) {
+            count++;
+        }
+
+        if (PasswordChecker.hasUpperCase(password)) {
+            count++;
+        }
+
+        if (PasswordChecker.hasDigit(password)) {
+            count++;
+        }
+
+        if (PasswordChecker.hasSpecialCharacter(password)) {
+            count++;
+        }
+
+        if (count >= 3) {
+            System.out.println("Strong Password");
+        } else {
+            System.out.println("Weak Password");
+        }
+
+        sc.close();
+    }
+}
