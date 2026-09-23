@@ -1,1 +1,51 @@
 
+//NotificationDemo.java
+@FunctionalInterface
+interface Notifier {
+    void send(String message);
+}
+
+interface Urgent {
+}
+
+class EmailSender implements Notifier, Urgent {
+    @Override
+    public void send(String message) {
+        System.out.println("Email: " + message);
+    }
+}
+
+class SmsSender implements Notifier {
+    @Override
+    public void send(String message) {
+        System.out.println("SMS: " + message);
+    }
+}
+
+public class NotificationDemo {
+    public static void main(String[] args) {
+
+        Notifier email = message ->
+                System.out.println("Email: " + message);
+
+        Notifier sms = message ->
+                System.out.println("SMS: " + message);
+
+        Notifier[] senders = {
+            new EmailSender(),
+            new SmsSender(),
+            email,
+            sms
+        };
+
+        String message = "Your account has been updated.";
+
+        for (Notifier sender : senders) {
+            sender.send(message);
+
+            if (sender instanceof Urgent) {
+                sender.send("URGENT: " + message);
+            }
+        }
+    }
+}
