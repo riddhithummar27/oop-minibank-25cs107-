@@ -1,0 +1,76 @@
+class Counter {
+    int count = 0;
+
+    
+    public void incrementWithoutSync() {
+        count++;
+    }
+
+  
+    public synchronized void incrementWithSync() {
+        count++;
+    }
+}
+
+public class CounterRace {
+
+    static final int THREADS = 10;
+    static final int INCREMENTS = 100000;
+
+    public static void main(String[] args) throws InterruptedException {
+
+
+
+        Counter counter1 = new Counter();
+
+        Thread[] threads1 = new Thread[THREADS];
+
+        for (int i = 0; i < THREADS; i++) {
+
+            threads1[i] = new Thread(() -> {
+                for (int j = 0; j < INCREMENTS; j++) {
+                    counter1.incrementWithoutSync();
+                }
+            });
+
+            threads1[i].start();
+        }
+
+     
+        for (Thread t : threads1) {
+            t.join();
+        }
+
+        int expected = THREADS * INCREMENTS;
+
+        System.out.println("WITHOUT SYNCHRONIZATION");
+        System.out.println("Expected count: " + expected);
+        System.out.println("Actual count:   " + counter1.count);
+
+
+        
+        Counter counter2 = new Counter();
+
+        Thread[] threads2 = new Thread[THREADS];
+
+        for (int i = 0; i < THREADS; i++) {
+
+            threads2[i] = new Thread(() -> {
+                for (int j = 0; j < INCREMENTS; j++) {
+                    counter2.incrementWithSync();
+                }
+            });
+
+            threads2[i].start();
+        }
+
+        
+        for (Thread t : threads2) {
+            t.join();
+        }
+
+        System.out.println("\nWITH SYNCHRONIZATION");
+        System.out.println("Expected count: " + expected);
+        System.out.println("Actual count:   " + counter2.count);
+    }
+}
