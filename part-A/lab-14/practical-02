@@ -1,1 +1,185 @@
+// File name: Practical14_Practical02.java
+// Practical 14 - Part A (2): Packages, Runnable JAR, and Save/Load Test
+//
+// This is intentionally kept in ONE Java source file for submission.
+// It demonstrates a model, a service using ArrayList, a menu, save/load,
+// and a simple test that confirms saved data reloads unchanged.
+//
+// Compile: javac Practical14.java
+// Run:     java Practical14
+// Note: For a true packaged runnable JAR, use Maven/package structure;
+// this single-file version is easy to copy into one GitHub file.
+
+import java.io.*;
+import java.util.*;
+
+class Task implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private final String name;
+
+    public Task(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Task name cannot be empty.");
+        }
+        this.name = name.trim();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof Task)) return false;
+        Task other = (Task) obj;
+        return name.equals(other.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name);
+    }
+}
+
+// Service layer: stores tasks in an ArrayList.
+class TaskService {
+    private final ArrayList<Task> tasks = new ArrayList<>();
+
+    public void addTask(String name) {
+        tasks.add(new Task(name));
+    }
+
+    public int getCount() {
+        return tasks.size();
+    }
+
+    public List<Task> getTasks() {
+        return new ArrayList<>(tasks);
+    }
+
+    public void replaceTasks(List<Task> loadedTasks) {
+        tasks.clear();
+        tasks.addAll(loadedTasks);
+    }
+
+    public void validateAction(int action) {
+        if (action < 1 || action > 4) {
+            throw new IllegalArgumentException("Invalid action: " + action);
+        }
+    }
+}
+
+// Persistence layer: saves and loads task data from a file.
+class TaskStorage {
+    public void save(List<Task> tasks, String fileName) throws IOException {
+        try (ObjectOutputStream out = new ObjectOutputStream(
+                new FileOutputStream(fileName))) {
+            out.writeObject(new ArrayList<>(tasks));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Task> load(String fileName)
+            throws IOException, ClassNotFoundException {
+        try (ObjectInputStream in = new ObjectInputStream(
+                new FileInputStream(fileName))) {
+            return (List<Task>) in.readObject();
+        }
+    }
+}
+
+public class Practical14_Practical02 {
+    private static final String DATA_FILE = "tasks.dat";
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        TaskService service = new TaskService();
+        TaskStorage storage = new TaskStorage();
+
+        while (true) {
+            System.out.println("\\n--- Task Manager ---");
+            System.out.println("1. Add Task");
+            System.out.println("2. View Tasks");
+            System.out.println("3. Load Tasks");
+            System.out.println("4. Save and Exit");
+            System.out.print("Enter choice: ");
+
+            String input = scanner.nextLine();
+
+            try {
+                int choice = Integer.parseInt(input);
+                service.validateAction(choice);
+
+                switch (choice) {
+                    case 1:
+                        System.out.print("Enter task name: ");
+                        service.addTask(scanner.nextLine());
+                        System.out.println("Task added successfully.");
+                        break;
+
+                    case 2:
+                        List<Task> tasks = service.getTasks();
+                        if (tasks.isEmpty()) {
+                            System.out.println("No tasks found.");
+                        } else {
+                            for (int i = 0; i < tasks.size(); i++) {
+                                System.out.println((i + 1) + ". " + tasks.get(i));
+                            }
+                        }
+                        break;
+
+                    case 3:
+                        try {
+                            service.replaceTasks(storage.load(DATA_FILE));
+                            System.out.println("Tasks loaded successfully.");
+                        } catch (IOException | ClassNotFoundException e) {
+                            System.out.println("Could not load tasks: " + e.getMessage());
+                        }
+                        break;
+
+                    case 4:
+                        try {
+                            storage.save(service.getTasks(), DATA_FILE);
+                            System.out.println("Tasks saved to " + DATA_FILE);
+                        } catch (IOException e) {
+                            System.out.println("Could not save tasks: " + e.getMessage());
+                        }
+                        scanner.close();
+                        System.out.println("Exiting...");
+                        return;
+
+                    default:
+                        break;
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a number from 1 to 4.");
+            } catch (IllegalArgumentException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    // Simple save/load test: confirms that the reloaded list equals the original.
+    public static boolean testSaveAndLoad() throws IOException, ClassNotFoundException {
+        TaskStorage storage = new TaskStorage();
+        List<Task> original = Arrays.asList(
+                new Task("Write Java code"),
+                new Task("Submit Practical 14")
+        );
+
+        String testFile = "test-tasks.dat";
+        storage.save(original, testFile);
+        List<Task> loaded = storage.load(testFile);
+
+        boolean passed = original.equals(loaded);
+        new File(testFile).delete();
+        return passed;
+    }
+}
 
