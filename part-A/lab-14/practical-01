@@ -1,4 +1,4 @@
-```java
+
 // File Name: LayeredApp.java
 // Practical 14 - Part A (1): Assemble and Test
 
@@ -85,5 +85,4 @@ public class LayeredApp {
         }
     }
 }
-```
 
