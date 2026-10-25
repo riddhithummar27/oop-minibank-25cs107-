@@ -1,96 +1,574 @@
-abstract class Account {
-    protected String accountNumber;
-    protected String holderName;
-    protected long balance;
+// File Name: MiniBank.java
 
-    Account(String accountNumber, String holderName, long balance) {
-        this.accountNumber = accountNumber;
-        this.holderName = holderName;
-        this.balance = balance;
-    }
 
-    abstract double interestRate();
+// Java 17+
+//
+// Compile: javac MiniBank.java
+// Run:     java MiniBank
+//
+// Features:
+// - Account creation, deposit, withdrawal and transfer
+// - Generic Repository<T> using @Id reflection
+// - Validation and custom exceptions
+// - Thread-safe account storage and concurrent batch deposits
+// - Account statements and reports
+// - Save/load data using object serialization
 
-    abstract boolean canWithdraw(long amount);
+import java.io.*;
+import java.lang.annotation.*;
+import java.lang.reflect.Field;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.*;
+
+// Annotation used by Repository to find an entity's ID.
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Id {
 }
 
-class SavingsAccount extends Account {
-    private long minBalance;
-
-    SavingsAccount(String accountNumber, String holderName, long balance, long minBalance) {
-        super(accountNumber, holderName, balance);
-        this.minBalance = minBalance;
-    }
-
-    @Override
-    double interestRate() {
-        return 4.0;
-    }
-
-    @Override
-    boolean canWithdraw(long amount) {
-        return balance - amount >= minBalance;
-    }
+// Validation annotation.
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Positive {
+    String message() default "must be greater than zero";
 }
 
-class CurrentAccount extends Account {
-    private long overdraftLimit;
-
-    CurrentAccount(String accountNumber, String holderName, long balance, long overdraftLimit) {
-        super(accountNumber, holderName, balance);
-        this.overdraftLimit = overdraftLimit;
-    }
-
-    @Override
-    double interestRate() {
-        return 0.0;
-    }
-
-    @Override
-    boolean canWithdraw(long amount) {
-        return balance - amount >= -overdraftLimit;
+// Custom exception hierarchy.
+class BankException extends Exception {
+    public BankException(String message) {
+        super(message);
     }
 }
 
-class FixedDepositAccount extends Account {
+class AccountNotFoundException extends BankException {
+    public AccountNotFoundException(String message) {
+        super(message);
+    }
+}
 
-    FixedDepositAccount(String accountNumber, String holderName, long balance) {
-        super(accountNumber, holderName, balance);
+class InvalidAmountException extends BankException {
+    public InvalidAmountException(String message) {
+        super(message);
+    }
+}
+
+class InsufficientFundsException extends BankException {
+    private final long shortfall;
+
+    public InsufficientFundsException(String message, long shortfall) {
+        super(message);
+        this.shortfall = shortfall;
+    }
+
+    public long getShortfall() {
+        return shortfall;
+    }
+}
+
+// Model class.
+class Account implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    private final String accountNumber;
+
+    private final String ownerName;
+
+    @Positive
+    private long balance;
+
+    private final ArrayList<String> history = new ArrayList<>();
+
+    public Account(String accountNumber, String ownerName, long openingBalance)
+            throws InvalidAmountException {
+        if (accountNumber == null || accountNumber.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account number cannot be empty.");
+        }
+        if (ownerName == null || ownerName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Owner name cannot be empty.");
+        }
+        if (openingBalance < 0) {
+            throw new InvalidAmountException("Opening balance cannot be negative.");
+        }
+
+        this.accountNumber = accountNumber.trim();
+        this.ownerName = ownerName.trim();
+        this.balance = openingBalance;
+        history.add(timestamp() + " | Account opened with balance " + openingBalance);
+    }
+
+    public String getAccountNumber() {
+        return accountNumber;
+    }
+
+    public String getOwnerName() {
+        return ownerName;
+    }
+
+    public synchronized long getBalance() {
+        return balance;
+    }
+
+    public synchronized void deposit(long amount) throws InvalidAmountException {
+        if (amount <= 0) {
+            throw new InvalidAmountException("Deposit amount must be greater than zero.");
+        }
+        balance += amount;
+        history.add(timestamp() + " | Deposited " + amount + " | Balance " + balance);
+    }
+
+    public synchronized void withdraw(long amount)
+            throws InvalidAmountException, InsufficientFundsException {
+        if (amount <= 0) {
+            throw new InvalidAmountException("Withdrawal amount must be greater than zero.");
+        }
+        if (amount > balance) {
+            throw new InsufficientFundsException(
+                    "Insufficient balance. Short by " + (amount - balance),
+                    amount - balance);
+        }
+        balance -= amount;
+        history.add(timestamp() + " | Withdrew " + amount + " | Balance " + balance);
+    }
+
+    public synchronized void recordTransfer(String description) {
+        history.add(timestamp() + " | " + description + " | Balance " + balance);
+    }
+
+    public synchronized List<String> getHistory() {
+        return new ArrayList<>(history);
+    }
+
+    private static String timestamp() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     @Override
-    double interestRate() {
-        return 7.0;
+    public synchronized String toString() {
+        return "Account Number: " + accountNumber
+                + " | Owner: " + ownerName
+                + " | Balance: " + balance;
+    }
+}
+
+// Generic repository. The @Id field is discovered using reflection.
+class Repository<T> {
+    private final ConcurrentHashMap<String, T> store = new ConcurrentHashMap<>();
+
+    public T save(T entity) {
+        String id = readId(entity);
+        store.put(id, entity);
+        return entity;
+    }
+
+    public T findById(String id) {
+        return store.get(id);
+    }
+
+    public ArrayList<T> findAll() {
+        return new ArrayList<>(store.values());
+    }
+
+    public boolean delete(String id) {
+        return store.remove(id) != null;
+    }
+
+    @SafeVarargs
+    public final void saveAll(T... entities) {
+        for (T entity : entities) {
+            save(entity);
+        }
+    }
+
+    public int size() {
+        return store.size();
+    }
+
+    private String readId(T entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("Entity cannot be null.");
+        }
+
+        Class<?> type = entity.getClass();
+        for (Field field : type.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Id.class)) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(entity);
+                    if (value == null) {
+                        throw new IllegalArgumentException("@Id field cannot be null.");
+                    }
+                    return value.toString();
+                } catch (IllegalAccessException e) {
+                    throw new IllegalStateException("Could not read @Id field.", e);
+                }
+            }
+        }
+        throw new IllegalArgumentException(
+                "No field annotated with @Id found in " + type.getSimpleName());
+    }
+}
+
+// Validates common input fields.
+class Validator {
+    public static boolean isValidMobile(String mobile) {
+        return mobile != null && mobile.matches("[6-9][0-9]{9}");
+    }
+
+    public static boolean isValidEmail(String email) {
+        return email != null && email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    }
+
+    public static boolean isValidAccountNumber(String accountNumber) {
+        return accountNumber != null && accountNumber.matches("AC[0-9]{4}");
+    }
+
+    public static String[] validate(Object object) {
+        ArrayList<String> errors = new ArrayList<>();
+        for (Field field : object.getClass().getDeclaredFields()) {
+            if (field.isAnnotationPresent(Positive.class)) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(object);
+                    if (value instanceof Number && ((Number) value).doubleValue() <= 0) {
+                        errors.add(field.getName() + " "
+                                + field.getAnnotation(Positive.class).message());
+                    }
+                } catch (IllegalAccessException e) {
+                    errors.add("Could not validate field " + field.getName());
+                }
+            }
+        }
+        return errors.toArray(new String[0]);
+    }
+}
+
+// Service layer coordinates the repository and account operations.
+class BankService {
+    private final Repository<Account> repository;
+
+    public BankService(Repository<Account> repository) {
+        this.repository = repository;
+    }
+
+    public Account openAccount(String owner, long openingBalance)
+            throws InvalidAmountException {
+        String accountNumber;
+        do {
+            accountNumber = String.format("AC%04d",
+                    ThreadLocalRandom.current().nextInt(0, 10000));
+        } while (repository.findById(accountNumber) != null);
+
+        Account account = new Account(accountNumber, owner, openingBalance);
+        repository.save(account);
+        return account;
+    }
+
+    public Account findAccount(String accountNumber) throws AccountNotFoundException {
+        Account account = repository.findById(accountNumber);
+        if (account == null) {
+            throw new AccountNotFoundException("Account not found: " + accountNumber);
+        }
+        return account;
+    }
+
+    public void deposit(String accountNumber, long amount)
+            throws BankException {
+        findAccount(accountNumber).deposit(amount);
+    }
+
+    public void withdraw(String accountNumber, long amount)
+            throws BankException {
+        findAccount(accountNumber).withdraw(amount);
+    }
+
+    public void transfer(String fromNumber, String toNumber, long amount)
+            throws BankException {
+        if (fromNumber.equals(toNumber)) {
+            throw new IllegalArgumentException("Source and destination must differ.");
+        }
+
+        Account from = findAccount(fromNumber);
+        Account to = findAccount(toNumber);
+
+        // Lock accounts in account-number order to prevent deadlock.
+        Account first = fromNumber.compareTo(toNumber) < 0 ? from : to;
+        Account second = first == from ? to : from;
+
+        synchronized (first) {
+            synchronized (second) {
+                from.withdraw(amount);
+                try {
+                    to.deposit(amount);
+                } catch (BankException e) {
+                    // Restore the source if destination deposit fails.
+                    from.deposit(amount);
+                    throw e;
+                }
+                from.recordTransfer("Transfer to " + toNumber + ": " + amount);
+                to.recordTransfer("Transfer from " + fromNumber + ": " + amount);
+            }
+        }
+    }
+
+    public String statement(String accountNumber) throws AccountNotFoundException {
+        Account account = findAccount(accountNumber);
+        StringBuilder statement = new StringBuilder();
+        statement.append("\n========== MINI BANK STATEMENT ==========\n");
+        statement.append(account).append("\n");
+        statement.append("Transaction History:\n");
+        for (String line : account.getHistory()) {
+            statement.append(line).append("\n");
+        }
+        statement.append("=========================================\n");
+        return statement.toString();
+    }
+
+    public List<Account> listAccounts() {
+        ArrayList<Account> accounts = repository.findAll();
+        accounts.sort(Comparator.comparing(Account::getAccountNumber));
+        return accounts;
+    }
+
+    public String report() {
+        List<Account> accounts = listAccounts();
+        long totalBalance = 0;
+        for (Account account : accounts) {
+            totalBalance += account.getBalance();
+        }
+        return "\n========== BANK REPORT ==========\n"
+                + "Total accounts: " + accounts.size() + "\n"
+                + "Total balance: " + totalBalance + "\n"
+                + "=================================\n";
+    }
+
+    public Repository<Account> getRepository() {
+        return repository;
+    }
+}
+
+// Saves/loads the account list.
+class BankStorage {
+    public void save(List<Account> accounts, String fileName) throws IOException {
+        try (ObjectOutputStream out = new ObjectOutputStream(
+                new FileOutputStream(fileName))) {
+            out.writeObject(new ArrayList<>(accounts));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Account> load(String fileName)
+            throws IOException, ClassNotFoundException {
+        try (ObjectInputStream in = new ObjectInputStream(
+                new FileInputStream(fileName))) {
+            return (List<Account>) in.readObject();
+        }
+    }
+}
+
+// Thread pool for concurrent batch deposits.
+class TransactionProcessor implements AutoCloseable {
+    private final ExecutorService executor = Executors.newFixedThreadPool(4);
+
+    public void submit(Runnable task) {
+        executor.execute(task);
+    }
+
+    public void stop() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Override
-    boolean canWithdraw(long amount) {
-        return false;
+    public void close() {
+        stop();
     }
 }
 
 public class MiniBank {
+    private static final String DATA_FILE = "minibank-data.dat";
+
     public static void main(String[] args) {
+        Repository<Account> repository = new Repository<>();
+        BankService bank = new BankService(repository);
+        BankStorage storage = new BankStorage();
 
-        Account[] accounts = {
-            new SavingsAccount("SA101", "Riddhi", 50000, 10000),
-            new CurrentAccount("CA102", "Anushka", 20000, 15000),
-            new FixedDepositAccount("FD103", "Krisha", 100000)
-        };
+        // Load previously saved accounts at start-up.
+        try {
+            List<Account> savedAccounts = storage.load(DATA_FILE);
+            for (Account account : savedAccounts) {
+                repository.save(account);
+            }
+            System.out.println("Loaded " + savedAccounts.size() + " saved account(s).");
+        } catch (FileNotFoundException e) {
+            System.out.println("No saved data found. Starting a new bank.");
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("Could not load saved data: " + e.getMessage());
+        }
 
-        for (Account account : accounts) {
+        runMenu(bank, storage);
+    }
 
-            System.out.println("Account: " + account.accountNumber);
-            System.out.println("Holder: " + account.holderName);
-            System.out.println("Balance: ₹" + account.balance);
-            System.out.println("Interest Rate: " + account.interestRate() + "%");
+    private static void runMenu(BankService bank, BankStorage storage) {
+        Scanner scanner = new Scanner(System.in);
 
-            if (account instanceof SavingsAccount savings) {
-                System.out.println("Minimum Balance: ₹" + savings.minBalance);
+        while (true) {
+            System.out.println("\n========== MINI BANK ==========");
+            System.out.println("1. Open Account");
+            System.out.println("2. Deposit");
+            System.out.println("3. Withdraw");
+            System.out.println("4. Transfer");
+            System.out.println("5. View Statement");
+            System.out.println("6. List Accounts");
+            System.out.println("7. Bank Report");
+            System.out.println("8. Run Concurrent Deposit Batch");
+            System.out.println("9. Save and Exit");
+            System.out.print("Enter choice: ");
+
+            String input = scanner.nextLine();
+            int choice;
+            try {
+                choice = Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a valid menu number.");
+                continue;
             }
 
-            System.out.println("Can Withdraw ₹15000: " + account.canWithdraw(15000));
-            System.out.println("----------------------");
+            try {
+                switch (choice) {
+                    case 1: {
+                        System.out.print("Owner name: ");
+                        String owner = scanner.nextLine();
+                        long openingBalance = readAmount(scanner, "Opening balance: ");
+                        Account account = bank.openAccount(owner, openingBalance);
+                        System.out.println("Account created successfully.");
+                        System.out.println(account);
+                        break;
+                    }
+                    case 2: {
+                        System.out.print("Account number: ");
+                        String number = scanner.nextLine().trim();
+                        long amount = readAmount(scanner, "Deposit amount: ");
+                        bank.deposit(number, amount);
+                        System.out.println("Deposit successful.");
+                        System.out.println(bank.findAccount(number));
+                        break;
+                    }
+                    case 3: {
+                        System.out.print("Account number: ");
+                        String number = scanner.nextLine().trim();
+                        long amount = readAmount(scanner, "Withdrawal amount: ");
+                        bank.withdraw(number, amount);
+                        System.out.println("Withdrawal successful.");
+                        System.out.println(bank.findAccount(number));
+                        break;
+                    }
+                    case 4: {
+                        System.out.print("From account: ");
+                        String from = scanner.nextLine().trim();
+                        System.out.print("To account: ");
+                        String to = scanner.nextLine().trim();
+                        long amount = readAmount(scanner, "Transfer amount: ");
+                        bank.transfer(from, to, amount);
+                        System.out.println("Transfer successful.");
+                        break;
+                    }
+                    case 5: {
+                        System.out.print("Account number: ");
+                        System.out.println(bank.statement(scanner.nextLine().trim()));
+                        break;
+                    }
+                    case 6: {
+                        List<Account> accounts = bank.listAccounts();
+                        if (accounts.isEmpty()) {
+                            System.out.println("No accounts found.");
+                        } else {
+                            for (Account account : accounts) {
+                                System.out.println(account);
+                            }
+                        }
+                        break;
+                    }
+                    case 7:
+                        System.out.println(bank.report());
+                        break;
+                    case 8: {
+                        System.out.print("Account number for batch deposits: ");
+                        String number = scanner.nextLine().trim();
+                        Account account = bank.findAccount(number);
+                        int taskCount = 10;
+                        long amountPerTask = 100;
+                        try (TransactionProcessor processor = new TransactionProcessor()) {
+                            for (int i = 0; i < taskCount; i++) {
+                                processor.submit(() -> {
+                                    try {
+                                        account.deposit(amountPerTask);
+                                    } catch (InvalidAmountException e) {
+                                        System.out.println(e.getMessage());
+                                    }
+                                });
+                            }
+                        }
+                        System.out.println("Completed " + taskCount
+                                + " deposits of " + amountPerTask + ".");
+                        System.out.println(account);
+                        break;
+                    }
+                    case 9:
+                        storage.save(bank.listAccounts(), DATA_FILE);
+                        System.out.println("Data saved. Goodbye!");
+                        scanner.close();
+                        return;
+                    default:
+                        System.out.println("Invalid choice. Select 1-9.");
+                }
+            } catch (BankException e) {
+                System.out.println("Bank error: " + e.getMessage());
+                if (e instanceof InsufficientFundsException) {
+                    System.out.println("Shortfall: "
+                            + ((InsufficientFundsException) e).getShortfall());
+                }
+            } catch (IllegalArgumentException e) {
+                System.out.println("Input error: " + e.getMessage());
+            } catch (IOException e) {
+                System.out.println("Could not save data: " + e.getMessage());
+            }
         }
+    }
+
+    private static long readAmount(Scanner scanner, String prompt) {
+        System.out.print(prompt);
+        try {
+            return Long.parseLong(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Amount must be a whole number.");
+        }
+    }
+
+    // Simple check that saved account data reloads unchanged.
+    public static boolean testSaveAndLoad() throws Exception {
+        BankStorage storage = new BankStorage();
+        Account account = new Account("AC9999", "Test User", 500);
+        List<Account> original = Collections.singletonList(account);
+        String testFile = "minibank-test-data.dat";
+
+        storage.save(original, testFile);
+        List<Account> loaded = storage.load(testFile);
+        boolean same = loaded.size() == 1
+                && loaded.get(0).getAccountNumber().equals(account.getAccountNumber())
+                && loaded.get(0).getOwnerName().equals(account.getOwnerName())
+                && loaded.get(0).getBalance() == account.getBalance();
+
+        new File(testFile).delete();
+        return same;
     }
 }
