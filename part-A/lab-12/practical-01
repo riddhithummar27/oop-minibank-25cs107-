@@ -1,1 +1,44 @@
+```java
+// File Name: WordFrequency.java
+// Practical 12 - Part A (1): Word Frequency
+
+import java.util.*;
+
+public class WordFrequency {
+
+    public static void main(String[] args) {
+
+        String paragraph = "Java is easy and Java is powerful. "
+                         + "Java is popular and easy to learn.";
+
+        // Split paragraph into words
+        String[] words = paragraph.toLowerCase().replaceAll("[^a-z ]", "")
+                                  .split("\\s+");
+
+        // Count word frequency using HashMap
+        HashMap<String, Integer> frequency = new HashMap<>();
+
+        for (String word : words) {
+            frequency.put(word, frequency.getOrDefault(word, 0) + 1);
+        }
+
+        // Sort words by frequency in descending order
+        List<Map.Entry<String, Integer>> list =
+                new ArrayList<>(frequency.entrySet());
+
+        list.sort(
+            Comparator.comparingInt(
+                (Map.Entry<String, Integer> entry) -> entry.getValue()
+            ).reversed()
+        );
+
+        // Display word frequencies
+        System.out.println("Word Frequencies:");
+
+        for (Map.Entry<String, Integer> entry : list) {
+            System.out.println(entry.getKey() + " : " + entry.getValue());
+        }
+    }
+}
+```
 
