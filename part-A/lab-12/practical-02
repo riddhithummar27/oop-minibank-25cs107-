@@ -1,1 +1,44 @@
+```java
+// File Name: UniqueVisitors.java
+// Practical 12 - Part A (2): Unique Visitors
+
+import java.util.*;
+
+public class UniqueVisitors {
+
+    public static void main(String[] args) {
+
+        // List of login names with repeated visitors
+        List<String> visitors = Arrays.asList(
+            "Radhi", "Riya", "Amit", "Radhi",
+            "Priya", "Riya", "Neha", "Amit"
+        );
+
+        // HashSet to count unique visitors
+        HashSet<String> uniqueVisitors = new HashSet<>(visitors);
+
+        // LinkedHashSet to maintain first-seen order
+        LinkedHashSet<String> orderedVisitors =
+                new LinkedHashSet<>(visitors);
+
+        // Print unique visitor count
+        System.out.println("Unique Visitors Count: "
+                + uniqueVisitors.size());
+
+        // Print the first three distinct visitors
+        System.out.println("First three distinct visitors:");
+
+        int count = 0;
+
+        for (String name : orderedVisitors) {
+            if (count == 3) {
+                break;
+            }
+
+            System.out.println(name);
+            count++;
+        }
+    }
+}
+```
 
