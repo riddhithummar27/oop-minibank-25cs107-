@@ -1,1 +1,73 @@
+```java
+// File Name: LogAnalyzer.java
+// Practical 11 - Part A (2): Log Analyzer
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
+
+public class LogAnalyzer {
+
+    public static void main(String[] args) {
+
+        // Create sample log files
+        try {
+            Files.write(Path.of("log1.txt"), List.of(
+                "INFO Application started",
+                "ERROR File not found",
+                "INFO User logged in"
+            ));
+
+            Files.write(Path.of("log2.txt"), List.of(
+                "INFO Server running",
+                "ERROR Database connection failed",
+                "INFO Application closed"
+            ));
+
+        } catch (IOException e) {
+            System.out.println("Error creating files: " + e.getMessage());
+            return;
+        }
+
+        String keyword = "ERROR";
+        int totalLines = 0;
+        int matchingLines = 0;
+
+        // Read and analyze all text files
+        try (DirectoryStream<Path> files =
+                     Files.newDirectoryStream(Path.of("."), "*.txt")) {
+
+            for (Path file : files) {
+
+                System.out.println("\nFile: " + file.getFileName());
+
+                // Print file size
+                BasicFileAttributes attr =
+                        Files.readAttributes(file, BasicFileAttributes.class);
+
+                System.out.println("File Size: " + attr.size() + " bytes");
+
+                // Read file line by line
+                List<String> lines = Files.readAllLines(file);
+
+                for (String line : lines) {
+                    totalLines++;
+
+                    if (line.contains(keyword)) {
+                        matchingLines++;
+                        System.out.println("Match: " + line);
+                    }
+                }
+            }
+
+        } catch (IOException e) {
+            System.out.println("Error reading files: " + e.getMessage());
+        }
+
+        System.out.println("\nTotal Lines: " + totalLines);
+        System.out.println("Lines containing \"" + keyword + "\": " + matchingLines);
+    }
+}
+```
 
