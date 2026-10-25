@@ -1,1 +1,89 @@
+```java
+// File Name: LayeredApp.java
+// Practical 14 - Part A (1): Assemble and Test
+
+import java.util.ArrayList;
+import java.util.Scanner;
+
+class Task {
+    private String name;
+
+    public Task(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+class TaskService {
+    private ArrayList<Task> tasks = new ArrayList<>();
+
+    public void addTask(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Task name cannot be empty");
+        }
+
+        tasks.add(new Task(name));
+    }
+
+    public int getCount() {
+        return tasks.size();
+    }
+
+    public void displayTasks() {
+        for (Task task : tasks) {
+            System.out.println(task.getName());
+        }
+    }
+}
+
+public class LayeredApp {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        TaskService service = new TaskService();
+
+        while (true) {
+            System.out.println("\n1. Add Task");
+            System.out.println("2. View Tasks");
+            System.out.println("3. View Task Count");
+            System.out.println("4. Exit");
+            System.out.print("Enter choice: ");
+
+            int choice = sc.nextInt();
+            sc.nextLine();
+
+            try {
+                switch (choice) {
+                    case 1:
+                        System.out.print("Enter task name: ");
+                        String name = sc.nextLine();
+                        service.addTask(name);
+                        System.out.println("Task added successfully.");
+                        break;
+
+                    case 2:
+                        service.displayTasks();
+                        break;
+
+                    case 3:
+                        System.out.println("Task count: " + service.getCount());
+                        break;
+
+                    case 4:
+                        System.out.println("Exiting...");
+                        sc.close();
+                        return;
+
+                    default:
+                        throw new IllegalArgumentException("Invalid action");
+                }
+            } catch (IllegalArgumentException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+    }
+}
+```
 
